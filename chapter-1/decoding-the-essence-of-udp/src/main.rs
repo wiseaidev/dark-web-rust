@@ -24,8 +24,8 @@ fn main() -> Result<()> {
     let raw_buffer: &[u8] =
         unsafe { std::slice::from_raw_parts(buffer.as_ptr() as *const u8, buffer.len()) };
 
-    // Print the captured packet
-    println!("{:?}", raw_buffer);
+    // Print the first 120 bytes of the captured packet
+    println!("{:?}", &raw_buffer[..120]);
 
     Ok(())
 }
