@@ -1,2 +1,3 @@
-# dark-web-rust
-A book for abusing Rust (WIP)
+# Dark Web Rust
+
+A continuum work of the [black-hat-rust](https://github.com/skerkour/black-hat-rust) book.
