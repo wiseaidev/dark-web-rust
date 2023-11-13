@@ -8,14 +8,14 @@ Before we dive into the complexities of network sniffing, let's establish a foun
 
 ## Table of Contents
 
-* [**Crafting a Rust Based Host Discovery Tool**](#1.-Crafting-a-Rust-Based-UDP-Host-Discovery-Tool)
-   * [**Network Exploration**](#1.1-Network-Exploration:-Decoding-the-Essence-of-UDP)
-   * [**Decoding the IP Layer**](#1.2-Decoding-the-IP-Layer-and-Uncover-Packet-Secrets)
-   * [**The IP Header Struct**](#1.3-The-IP-Header-Struct)
-   * [**Putting It All Together**](#1.4-Putting-It-All-Together)
-   * [**ICMP Structure Decoding**](#1.5-ICMP-Structure-Decoding)
-   * [**Decoding-TCP-packets**](#1.6-Decoding-TCP-packets)
-   * [**Decoding-UDP-packets**](#1.7-Decoding-UDP-packets)
+* [**Crafting a Rust Based Host Discovery Tool**](#1-crafting-a-rust-based-udp-host-discovery-tool)
+   * [**Network Exploration**](#11-network-exploration-decoding-the-essence-of-udp)
+   * [**Decoding the IP Layer**](#12-decoding-the-ip-layer-and-uncover-packet-secrets)
+   * [**The IP Header Struct**](#13-the-ip-header-struct)
+   * [**Putting It All Together**](#14-putting-it-all-together)
+   * [**ICMP Structure Decoding**](#15-icmp-structure-decoding)
+   * [**Decoding-TCP-packets**](#16-decoding-tcp-packets)
+   * [**Decoding-UDP-packets**](#17-decoding-udp-packets)
 
 ## 1. Crafting a Rust-Based UDP Host Discovery Tool
 
