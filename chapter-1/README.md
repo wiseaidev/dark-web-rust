@@ -16,6 +16,7 @@ Before we dive into the complexities of network sniffing, let's establish a foun
    * [**ICMP Structure Decoding**](#15-icmp-structure-decoding)
    * [**Decoding-TCP-packets**](#16-decoding-tcp-packets)
    * [**Decoding-UDP-packets**](#17-decoding-udp-packets)
+   * [**Port Scanning with SYN-flood Protections**](#18-port-scanning-in-the-presence-of-syn-flood-protections)
 
 ## 1. Crafting a Rust-Based UDP Host Discovery Tool
 
@@ -1286,3 +1287,232 @@ The above output represents a UDP packet captured from a network communication. 
 Examining the details of the UDP packet, the version field appears anomalous as it is labeled as 69. Typically, the version field in UDP packets is set to 0, and the presence of 69 could indicate a non-standard or proprietary use of the protocol. The header length is reported as 89, and the Time-to-Live (TTL) is set to the maximum value of 255. These values suggest a relatively large and possibly complex UDP packet with an extended header. The Source and Destination Ports are both identified as 5353, indicating a consistent port for both the sender and receiver. The Length field specifies the size of the UDP packet as 69 bytes, and the Checksum is reported as 12990, which is a value computed for error-checking purposes. In-depth analysis of these fields aids in understanding the characteristics and potential purposes of this UDP communication.
 
 The context of this UDP packet, being associated with multicast communication, suggests a scenario where devices on the network are exchanging service-related information. The choice of UDP aligns with service discovery mechanisms, which often prioritize efficiency and real-time updates over the reliability ensured by TCP. The unusual version field and the seemingly extended header length warrant further investigation, as they may indicate a specialized application or protocol extension. In conclusion, decoding and comprehending the complexities of this UDP packet provide valuable insights into the dynamics of local network communication and the specific protocols employed for service discovery or similar purposes.
+
+### 1.8 Port Scanning in the Presence of SYN-flood Protections
+
+Building a Port Scanning tool in the presence of [**SYN-flood**](https://en.wikipedia.org/wiki/SYN_flood) Protections involves understanding how to find open ports, especially when facing challenges like SYN-flood protections. In the following sections, we are going to create a program to scan for open ports on a remote host. However, sometimes it can be wrong. This happens when a system uses SYN-flood protections, a kind of security that can confuse our program by making all ports look the same. Even if they are open, closed, or filtered, they all seem open due to a special security measure called [**SYN cookies**](https://en.wikipedia.org/wiki/SYN_cookies). These cookies help prevent certain types of cyber attacks, but they can also make our program think a port is open when it's not.
+
+In scenarios where SYN cookies are deployed, distinguishing between a genuinely active service and a falsely indicated open port becomes a meticulous task. Both cases involve the completion of the TCP three-way [**handshake**](https://en.wikipedia.org/wiki/Handshake_(computing)), a sequence crucial for determining port status in traditional port scanning tools like [**Nmap**](https://en.wikipedia.org/wiki/Nmap). However, SYN-flood protections introduce complexity, limiting the reliability of these conventional tools. To address this challenge, an alternative approach is proposed, focusing on post-connection activities. SYN-flood protections typically refrain from packet exchanges beyond the initial handshake unless a service is actively listening. Consequently, the detection of additional packets post-handshake could signify the existence of a service.
+
+A crucial aspect of adapting port-scanning capabilities to account for SYN cookies lies in examining TCP flags. The TCP specification designates a single byte at position 14 in the packet's header to store flags, with each bit representing a specific flag value. To create an effective filter, the relevant flag positions are identified, including ACK and FIN, ACK, and ACK and PSH. Leveraging the `socket2` library, we can connect to a remote service, capture and filter packets, and selectively display services indicating legitimate communications with specific TCP headers. This approach assumes that services not conforming to these criteria are falsely labeled as "open" due to SYN cookies.
+
+The implementation of a [Berkeley Packet Filter (BPF)](https://en.wikipedia.org/wiki/Berkeley_Packet_Filter) filter is essential for inspecting specific flag values indicative of packet transfers. The filter, focusing on the 14th byte (offset 13 for a 0-based index) of the TCP header, targets packets with flags set to ack and fin, or ack, or ack && psh. The resulting BPF filter serves as a critical tool for determining legitimate service responses in the presence of SYN-flood protections.
+
+Subsequently, we will introduce a port-scanning program that utilizes the BPF filter to establish full TCP connections and analyze packets beyond the three-way handshake. The program, while not optimized for efficiency, provides a functional demonstration. Key variables, such as the filter, device availability, and a results map tracking port confidence levels, are defined. The `sniff` function, executed in a separate thread, captures and processes packets concurrently. The `main` function parses target ports, initiates TCP connection attempts, and processes results based on confidence levels.
+
+```rust
+fn sniff(
+    socket: SocketAddr,
+    _iface: &str,
+    target: &str,
+    results: Arc<Mutex<HashMap<String, usize>>>,
+) -> io::Result<()> {
+    let socket_protocol = if cfg!(target_os = "windows") {
+        0
+    } else {
+        6 // TCP
+    };
+    let sniffer = Socket::new(
+        Domain::IPV4,
+        Type::RAW,
+        Some(Protocol::from(socket_protocol)),
+    )?;
+    sniffer.bind(&socket.into())?;
+
+    // TODO: set interface
+    // Available only on MacOS: https://docs.rs/socket2/latest/socket2/struct.Socket.html#method.device_index_v4
+    // let iface_index = sniffer.device_index_v4(&iface)?;
+    // socket.bind_device_by_index_v4(Some(&iface_index))?;
+
+    let mut buffer: [MaybeUninit<u8>; 65535] = unsafe { MaybeUninit::uninit().assume_init() };
+
+    println!("Capturing packets");
+    loop {
+        // Receive a TCP packet
+        let _length = sniffer.recv_from(&mut buffer).unwrap();
+        let raw_buffer: &[u8] =
+            unsafe { std::slice::from_raw_parts(buffer.as_ptr() as *const u8, buffer.len()) };
+
+        // Create an IP header from the first 20 bytes
+        let ip_header = match IP::new(&raw_buffer[..20]) {
+            Some(header) => header,
+            None => return Ok(()),
+        };
+
+        if ip_header.dst_address() != target {
+            continue;
+        }
+
+        if raw_buffer.len() < IPV4_HEADER_SIZE + TCP_HEADER_SIZE {
+            eprintln!("Invalid packet: too short");
+            continue;
+        }
+
+        let tcp_header =
+            TCP::new(&raw_buffer[IPV4_HEADER_SIZE..IPV4_HEADER_SIZE + TCP_HEADER_SIZE + 1]);
+
+        // Check if the flags match the specified combinations for Berkeley Packet Filter
+        let ack = (tcp_header.flags & ACK) != 0;
+        let fin = (tcp_header.flags & FIN) != 0;
+        let psh = (tcp_header.flags & PSH) != 0;
+
+        if !(ack && fin || ack || ack && psh) {
+            continue;
+        }
+
+        // Add the source port
+        let mut results = results.lock().unwrap();
+        results
+            .entry(tcp_header.destination_port.to_string())
+            .and_modify(|e| *e += 1)
+            .or_insert(1);
+    }
+}
+
+fn main() -> io::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 3 {
+        eprintln!("Usage: {} <target_ip> <ports>", args[0]);
+        std::process::exit(1);
+    }
+
+    let target = match args.get(1) {
+        Some(target) => target,
+        None => "eth0",
+    };
+
+    let ports: Vec<&str> = match args.get(2) {
+        Some(ports) => ports.split(',').collect(),
+        None => vec!["eth0"],
+    };
+
+    let iface = match args.get(3) {
+        Some(iface) => iface,
+        None => "eth0",
+    };
+
+    let results = Arc::new(Mutex::new(HashMap::new()));
+
+    let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 12345);
+
+    let sniff_thread = thread::spawn({
+        let iface = iface.to_string();
+        let target = target.to_string();
+        let results = results.clone();
+        move || {
+            if let Err(err) = sniff(socket, &iface, &target, results) {
+                eprintln!("Error capturing packets: {}", err);
+            }
+        }
+    });
+
+    thread::sleep(Duration::from_secs(1));
+
+    for port in ports {
+        let target_addr = format!("{}:{}", target, port);
+        println!("Trying {}", target_addr);
+        // Opens a TCP connection to a remote host with a timeout.
+        if let Ok(stream) =
+            TcpStream::connect_timeout(&target_addr.parse::<SocketAddr>().unwrap(), TIMEOUT)
+        {
+            println!("Couldn't connect to the remote host...");
+            drop(stream);
+        }
+    }
+
+    thread::sleep(Duration::from_secs(2));
+
+    let results = results.lock().unwrap();
+    for (port, confidence) in results.iter() {
+        if *confidence >= 1 {
+            println!("Port {} open (confidence: {})", port, confidence);
+        }
+    }
+
+    if results.len() == 0 {
+        println!("All scanned ports on {} are closed", target);
+    }
+    sniff_thread.join().unwrap();
+    Ok(())
+}
+```
+
+This code contains two primary functions, namely `sniff` and `main`, aimed at facilitating port scanning with due consideration for SYN-flood protection mechanisms. A comprehensive understanding of the code's complexities necessitates a detailed exploration of each segment.
+
+#### The `sniff` Function:
+
+Within the code, the `sniff` function plays a pivotal role in capturing network packets and meticulously monitoring them to determine the status of open ports. This function exhibits a nuanced design, reflecting an intelligent approach to packet analysis. The function's signature discloses its parameters, notably the `socket` representing the local socket address for binding during packet capture, the `_iface` parameter intended for specifying the network interface (though currently unused), the `target` denoting the destination IP address for port scanning, and finally, the `results` parameter encapsulating the outcomes within an `Arc<Mutex<HashMap<String, usize>>>` structure, ensuring thread-safe storage.
+
+The internal workings of the `sniff` function reveal a strategic use of conditional checks and packet analysis techniques. The function begins by determining the protocol of the local socket, accounting for variations across operating systems. Following this, a `Socket` instance is instantiated to engage in raw socket operations. Despite a placeholder for setting the network interface (`_iface`), the current implementation remains devoid of this functionality. The function utilizes an iterative loop for continuous packet reception, forming the core of the packet-sniffing process.
+
+Incoming packets experience a multistage assessment, starting with the creation of an IP header based on the initial 20 bytes. Subsequently, the destination address of the IP header experiences a check, and if it aligns with the designated target, the analysis proceeds. A safeguard against insufficient packet length is implemented to handle potential anomalies, flagging invalid packets that fall below a defined size threshold. The function then extracts the TCP header from the packet, and crucially, evaluates the TCP flags against predefined combinations indicative of particular states.
+
+Flag combinations such as `ACK and FIN`, `ACK`, and `ACK and PSH` are analyzed, with packets not conforming to these patterns being disregarded: the Berkeley Packet Filter. Upon a successful match, the source port information is extracted, and the results are updated within the thread-safe data structure. The utilization of a mutex ensures the integrity of concurrent data modifications. This complex technique of packet analysis within the `sniff` function forms the foundation of the overall port-scanning effort.
+
+#### The `main` Function:
+
+The `main` function orchestrates the overarching flow of the program, serving as the entry point for execution. Its primary responsibilities include parsing command-line arguments, initializing key variables, spawning a thread for packet sniffing, conducting TCP connection attempts on specified ports, and finally, presenting packed results.
+
+Starting with argument parsing, the function dynamically adapts to user inputs, accommodating variations in the provided parameters. The instantiation of an `Arc<Mutex<HashMap<String, usize>>>` structure named `results` signifies the shared container for collating and safeguarding the outcome of port scans.
+
+The creation of a socket address (`socket`) and subsequent thread instantiation for packet sniffing encapsulates the concurrent nature of the operation. A strategic pause via `thread::sleep` ensures synchronization, allowing the packet-sniffing thread to initialize before the subsequent port connection attempts begin.
+
+Iterating through the specified ports, the code initiates TCP connection attempts on the target IP, assessing the state of each port. A subsequent delay provides time for the packet-sniffing thread to capture relevant data. Post-delay, the results are extracted and analyzed, with open ports and associated confidence levels being displayed.
+
+Noteworthy is the final assessment, where the absence of open ports prompts a notification regarding the closure of all scanned ports on the target. The tidy conclusion of the `main` function involves awaiting the termination of the packet-sniffing thread, ensuring a graceful exit from the program.
+
+In summary, the combination of the `sniff` and `main` functions orchestrates a sophisticated yet rational approach to SYN-flood-protected port scanning. Each function contributes distinctively to the overarching objective, emphasizing the complexities involved in scanning network packets, interpreting TCP flags, and consolidating results within a concurrent and thread-safe framework.
+
+
+```Rust
+// The following command will execute the sniffer.
+// Set your sudo password below by replacing 'your-passowrd' accordingly
+
+let command = "cd syn-flood-port-scanning && cargo build && echo 'your-passowrd' | sudo -S setcap cap_net_raw+ep target/debug/syn-flood-port-scanning && target/debug/syn-flood-port-scanning";
+
+if let Err(err) = execute_command(command) {
+    eprintln!("Error executing command: {}", err);
+}
+```
+
+        Finished dev [unoptimized + debuginfo] target(s) in 0.01s
+    [sudo] password for mahmoud: Usage: target/debug/syn-flood-port-scanning <target_ip>
+    Error executing command: Operation not permitted (os error 1)
+
+
+
+
+
+    ()
+
+
+
+
+```Rust
+// The following command will execute the sniffer.
+// Set your sudo password below by replacing 'your-passowrd' accordingly
+// Set <target_ip> and <port_numbers> at the very end of the command, like: 127.0.0.1 80,443,5555
+
+let command = "cd syn-flood-port-scanning && cargo build && echo 'your-passowrd' | sudo -S setcap cap_net_raw+ep target/debug/syn-flood-port-scanning && target/debug/syn-flood-port-scanning 127.0.0.1 80,443";
+
+if let Err(err) = execute_command(command) {
+    eprintln!("Error executing command: {}", err);
+}
+```
+
+        Finished dev [unoptimized + debuginfo] target(s) in 0.01s
+
+
+    Capturing packets
+    Trying 127.0.0.1:80
+    Trying 127.0.0.1:443
+    Port 443 open (confidence: 1)
+    Port 35642 open (confidence: 1)
+    Port 35628 open (confidence: 3)
+    Port 34006 open (confidence: 1)
+    Port 80 open (confidence: 1)
+
+
+The output reveal the outcomes of the connection attempts, portraying a detailed account of the open ports and their associated confidence levels. Port 443 emerges as open with a confidence rating of 1, signifying that a packet with the specified TCP flags indicative of an open port was successfully intercepted during the packet-capturing phase. Similarly, ports 35642, 35628, and 34006 exhibit varying degrees of openness, each accompanied by a confidence level reflecting the frequency of corresponding packet captures. The confidence metric provides a nuanced perspective, offering insight into the reliability of the open port determination. In essence, a higher confidence level indicates a more robust affirmation of the port's accessibility.
+
+In conclusion, the exploration of SYN-flood protections in port scanning underscores the dynamic nature of cybersecurity challenges. This section emphasizes adaptive strategies, leveraging post-connection packet analysis and BPF filters, to enhance the accuracy of port-scanning results in the presence of SYN cookies.
