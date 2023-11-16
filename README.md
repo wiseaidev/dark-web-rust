@@ -11,6 +11,10 @@
 [![Share On Meta](https://img.shields.io/badge/share%20on-meta-1976D2?logo=meta)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/wiseaidev/dark-web-rust)
 [![Share On Linkedin](https://img.shields.io/badge/share%20on-linkedin-3949AB?logo=linkedin)](https://www.linkedin.com/shareArticle?url=https://github.com/wiseaidev/dark-web-rust&title=A%20hands-on%20book%20for%20abusing%20systems%20using%20Rust)
 
+## ⚠️ **Warning: Repository Content Alert**
+
+> This repository contains an array of sophisticated methodologies that delve into the complex world of hacking and cybersecurity exploration. It is imperative to comprehend that using the tools and resources provided within this repository carries inherent risks that extend beyond the digital sphere. The utilization of these tools in any unauthorized manner may lead to severe legal consequences, including legal action and imprisonment. By accessing and experimenting with the contents provided, you do so entirely at your own risk, acknowledging the seriousness of the subject matter contained within. It is essential to emphasize that the purpose of this repository is strictly **educational** and **research-oriented**, aimed at promoting a deeper understanding of cybersecurity principles and vulnerabilities. Users are strongly advised to exercise utmost caution, adhere to ethical guidelines, and refrain from any activities that may breach legal boundaries. Remember, the responsibility lies solely with the user, and any misuse of the tools provided could have profound legal ramifications.
+
 Welcome to the **Dark Web Rust** repository! This project is a continuum work of the [black-hat-rust](https://github.com/skerkour/black-hat-rust) book. Here, you'll delve into the world of networking, implementing low-level protocols, including IP, TCP, UDP, ICMP, and much more topics. The primary focus is on hands-on hacking methodologies, providing a comprehensive learning experience through Jupyter notebooks. Each chapter in this repository is also available in PDFs, Markdown, and other formats.
 
 ## 📝 Table of Contents
@@ -72,3 +76,5 @@ This project is licensed under the [MIT](https://opensource.org/licenses/MIT). F
 ## 📈 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=wiseaidev/dark-web-rust&type=Date)](https://star-history.com/#wiseaidev/dark-web-rust&Date)
+
+**Stay Ethical, Stay Legal. Use Responsibly.** ⚠️
