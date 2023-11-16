@@ -1,21 +1,15 @@
-#![allow(unused)]
-
-use crc32_v2::byfour::crc32_little;
-use std::env;
 use std::fs::File;
-use std::io::{copy, Error, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::ErrorKind;
+use std::io::{Read, Seek, SeekFrom};
 use std::mem;
 use std::str;
-use std::str::FromStr;
 
-const CRC32_INIT: u32 = 0;
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Header {
     header: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Chunk {
     size: u32,
     r#type: u32,
@@ -23,7 +17,6 @@ struct Chunk {
     crc: u32,
 }
 
-#[derive(Debug, Clone)]
 struct MetaChunk {
     header: Header,
     chk: Chunk,
@@ -43,7 +36,7 @@ fn u64_to_u8_array(value: u64) -> [u8; 8] {
 }
 
 impl MetaChunk {
-    fn pre_process_image(file: &mut File) -> Result<MetaChunk, Error> {
+    fn pre_process_image(file: &mut File) -> Result<MetaChunk, std::io::Error> {
         let mut header = Header { header: 0 };
         file.read_exact(unsafe { mem::transmute::<_, &mut [u8; 8]>(&mut header.header) })?;
 
@@ -75,7 +68,7 @@ impl MetaChunk {
         while chunk_type != end_chunk_type {
             println!("---- Chunk # {} ----", count);
             let offset = self.get_offset(file);
-            println!("Chunk offset: {:x}", offset);
+            println!("Chunk Offset: {:x}", offset);
             self.read_chunk(file);
             chunk_type = self.chunk_type_to_string();
             count += 1;
@@ -83,7 +76,7 @@ impl MetaChunk {
     }
 
     fn get_offset(&mut self, file: &mut File) -> u64 {
-        let offset = file.seek(SeekFrom::Current(5)).unwrap();
+        let offset = file.seek(SeekFrom::Current(0)).unwrap();
         self.offset = offset;
         offset
     }
@@ -172,120 +165,12 @@ impl MetaChunk {
     fn chunk_type_to_string(&self) -> String {
         String::from_utf8_lossy(&self.chk.r#type.to_be_bytes()).to_string()
     }
-
-    fn marshal_data(&self) -> Vec<u8> {
-        let mut bytes_msb = Vec::new();
-        bytes_msb.push(self.chk.data.len() as u8);
-        bytes_msb.write_all(&self.chk.r#type.to_be_bytes()).unwrap();
-        bytes_msb.write_all(&self.chk.data).unwrap();
-        bytes_msb.write_all(&self.chk.crc.to_be_bytes()).unwrap();
-        println!("Encoded Payload: {:?}", bytes_msb);
-        bytes_msb
-    }
-
-    fn write_data<R: Read + Seek, W: Write>(&self, r: &mut R, c: &CmdArgs, mut w: W) {
-        // write header at position 0
-        let b_arr = u64_to_u8_array(self.header.header);
-        w.write_all(&b_arr).unwrap();
-        // write from 0 to offset
-        let offset = i64::from_str(&c.offset).unwrap();
-        let mut buff = vec![0; offset as usize];
-        r.read_exact(&mut buff).unwrap();
-        w.write_all(&buff).unwrap();
-        // write payload at offset
-        let data: Vec<u8> = self.marshal_data();
-        w.write_all(&data).unwrap();
-        // write from offset to end
-        // uncomment the following line to preserve the length of the image after manipulation
-        // r.seek(SeekFrom::Current(data.len().try_into().unwrap())).expect("Error seeking to offset");
-        copy(r, &mut w).unwrap();
-    }
-}
-
-struct CmdArgs {
-    input: String,
-    output: String,
-    meta: bool,
-    suppress: bool,
-    offset: String,
-    inject: bool,
-    payload: String,
-    r#type: String,
-    encode: bool,
-    decode: bool,
-    key: String,
-}
-
-impl CmdArgs {
-    fn new(args: &[String]) -> Result<Self, &'static str> {
-        if args.len() < 5 {
-            return Err("Not enough arguments. Usage: program input output offset payload");
-        }
-
-        Ok(CmdArgs {
-            input: args[1].clone(),
-            output: args[2].clone(),
-            meta: false,
-            suppress: false,
-            offset: args[3].clone(),
-            inject: false,
-            payload: args[4].clone(),
-            r#type: String::from("PNG"),
-            encode: args.contains(&String::from("encode")),
-            decode: args.contains(&String::from("decode")),
-            key: args[5].clone(),
-        })
-    }
-}
-
-fn xor_encode_decode(input: &[u8], key: &str) -> Vec<u8> {
-    let mut b_arr = Vec::with_capacity(input.len());
-    for (i, &byte) in input.iter().enumerate() {
-        b_arr.push(byte.wrapping_add(key.as_bytes()[i % key.len()]));
-    }
-    b_arr
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let cmd_line_opts = match CmdArgs::new(&args) {
-        Ok(opts) => opts,
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            return;
-        }
-    };
-
-    let mut file = File::open(&cmd_line_opts.input).expect("Error opening file");
+    let mut file = File::open("prj.png").expect("Error opening file");
 
     let mut meta_chunk = MetaChunk::pre_process_image(&mut file).expect("Error processing image");
 
-    if cmd_line_opts.encode {
-        let mut file_writer = File::create(&cmd_line_opts.output).unwrap();
-        // Assuming encoding is requested
-        let encoded_data = xor_encode_decode(cmd_line_opts.payload.as_bytes(), &cmd_line_opts.key);
-
-        // Calculate CRC for the encoded data
-        let mut bytes_msb = Vec::new();
-        bytes_msb
-            .write_all(&meta_chunk.chk.r#type.to_be_bytes())
-            .unwrap();
-        bytes_msb.write_all(&encoded_data).unwrap();
-        let crc = crc32_little(meta_chunk.chk.crc, &bytes_msb);
-
-        // Update the MetaChunk with the encoded data and CRC
-        meta_chunk.chk.data = encoded_data;
-        meta_chunk.chk.crc = crc;
-
-        // Create a new mutable reference to file_reader
-        let mut file_reader = &file;
-
-        meta_chunk.write_data(&mut file_reader, &cmd_line_opts, &mut file_writer);
-
-        println!("Image encoded and written successfully!");
-    } else if cmd_line_opts.decode {
-        // TODO: Find and decode the payload
-        meta_chunk.process_image(&mut file);
-    }
+    meta_chunk.process_image(&mut file);
 }
