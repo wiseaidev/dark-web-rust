@@ -68,6 +68,7 @@ To use the notebooks in this repository, you need to set up your environment. Fo
 |----|---------------|-----------|:-------------|-------------|----------------|-------|
 | 1  | **Crafting a Rust-Based Network Sniffer** | 42 | - Introduction to Network Sniffers <br>- Rust for Network Programming <br>- The `socket2` Crate <br>- Fundamentals of Raw Network Packets in Rust<br>- Decoding different IP and Transport layers Packets in Rust<br>- How to build your own custom NMAP-like ports scanner | [![Github](https://img.shields.io/badge/launch-Github-181717.svg?logo=github&logoColor=white)](./chapter-1/chapter-1.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/wiseaidev/dark-web-rust/main?filepath=chapter-1/chapter-1.ipynb) | [![nbviewer](https://img.shields.io/badge/Read%20PDF-nbviewer-blue)](https://nbviewer.org/github/wiseaidev/dark-web-rust/tree/main/chapter-1/chapter-1.pdf) |
 | 2  | **Hidden Threads: Mastering the Art of Steganography in Rust** | TODO |  - Exploring the PNG File Format <br>- Reading amd Validating PNG Image Files <br>- Preprocessing PNG Images. <br>- Hiding Secrets with Steganography<br> | [![Github](https://img.shields.io/badge/launch-Github-181717.svg?logo=github&logoColor=white)](./chapter-2/chapter-2.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/wiseaidev/dark-web-rust/main?filepath=chapter-2/chapter-2.ipynb) | TODO |
+| 3  | **Rust's Cryptographic Strengths and Vulnerabilities** | TODO |  TODO | TODO | TODO | TODO |
 
 ## 📜 License
 
