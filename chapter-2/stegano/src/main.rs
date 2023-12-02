@@ -54,7 +54,7 @@ impl MetaChunk {
             println!("It is a valid PNG file. Let's process it!");
         }
 
-        let offset = file.seek(SeekFrom::Current(0))?;
+        let offset = file.stream_position()?;
         Ok(MetaChunk {
             header,
             chk: Chunk {
@@ -82,26 +82,29 @@ impl MetaChunk {
         }
     }
 
-    fn get_offset(&mut self, file: &mut File) -> u64 {
+    fn get_offset<T: Read + Seek>(&mut self, file: &mut T) -> u64 {
         let offset = file.seek(SeekFrom::Current(5)).unwrap();
         self.offset = offset;
         offset
     }
 
-    fn read_chunk(&mut self, file: &mut File) {
+    fn read_chunk<T: Read + Seek>(&mut self, file: &mut T) {
         self.read_chunk_size(file);
         self.read_chunk_type(file);
         self.read_chunk_bytes(file, self.chk.size);
         self.read_chunk_crc(file);
     }
 
-    fn read_chunk_size(&mut self, file: &mut File) {
+    fn read_chunk_size<R: Read>(&mut self, file: &mut R) {
         let mut size_bytes = [0; 4];
 
         match file.read_exact(&mut size_bytes) {
             Ok(_) => {
                 // Successfully read the expected number of bytes
-                self.chk.size = u32::from_be_bytes(size_bytes);
+                // self.chk.size = u32::from_be_bytes(size_bytes);
+                // let max_number = *size_bytes.iter().max_by(|a, b| a.cmp(b)).unwrap();
+                // self.chk.size = max_number as u32;
+                self.chk.size = size_bytes[3] as u32;
             }
             Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
                 // Handle the situation where the file ends before reading the expected bytes
@@ -113,7 +116,7 @@ impl MetaChunk {
         }
     }
 
-    fn read_chunk_type(&mut self, file: &mut File) {
+    fn read_chunk_type<R: Read>(&mut self, file: &mut R) {
         let mut type_bytes = [0; 4];
 
         match file.read_exact(&mut type_bytes) {
@@ -131,7 +134,7 @@ impl MetaChunk {
         }
     }
 
-    fn read_chunk_bytes(&mut self, file: &mut File, len: u32) {
+    fn read_chunk_bytes<T: Read + Seek>(&mut self, file: &mut T, len: u32) {
         self.chk.data = vec![0; len as usize];
 
         match file.read_exact(&mut self.chk.data) {
@@ -143,7 +146,7 @@ impl MetaChunk {
                 // Update the length of the Chunk based on the actual number of bytes read
                 self.chk
                     .data
-                    .truncate(file.seek(SeekFrom::Current(0)).unwrap() as usize);
+                    .truncate(file.stream_position().unwrap() as usize);
             }
             Err(err) => {
                 eprintln!("Error reading chunk bytes: {}", err);
@@ -151,7 +154,7 @@ impl MetaChunk {
         }
     }
 
-    fn read_chunk_crc(&mut self, file: &mut File) {
+    fn read_chunk_crc<R: Read>(&mut self, file: &mut R) {
         let mut crc_bytes = [0; 4];
 
         match file.read_exact(&mut crc_bytes) {
@@ -183,22 +186,39 @@ impl MetaChunk {
         bytes_msb
     }
 
-    fn write_data<R: Read + Seek, W: Write>(&self, r: &mut R, c: &CmdArgs, mut w: W) {
-        // write header at position 0
+    fn write_data<R: Read + Seek, W: Write>(&mut self, r: &mut R, c: &CmdArgs, mut w: W) {
+        // Common encoding and decoding process
         let b_arr = u64_to_u8_array(self.header.header);
         w.write_all(&b_arr).unwrap();
-        // write from 0 to offset
         let offset = i64::from_str(&c.offset).unwrap();
-        let mut buff = vec![0; offset as usize];
-        r.read_exact(&mut buff).unwrap();
-        w.write_all(&buff).unwrap();
-        // write payload at offset
-        let data: Vec<u8> = self.marshal_data();
-        w.write_all(&data).unwrap();
-        // write from offset to end
-        // uncomment the following line to preserve the length of the image after manipulation
-        // r.seek(SeekFrom::Current(data.len().try_into().unwrap())).expect("Error seeking to offset");
-        copy(r, &mut w).unwrap();
+        let mut buff = vec![0; (offset - 8) as usize];
+
+        if c.encode {
+            // Encoding specific operations
+            buff.resize((offset - 8) as usize, 0);
+            r.read_exact(&mut buff).unwrap();
+            w.write_all(&buff).unwrap();
+            let data: Vec<u8> = self.marshal_data();
+            w.write_all(&data).unwrap();
+            // Uncomment the following line to preserve the length of the image after manipulation
+            // r.seek(SeekFrom::Current(data.len().try_into().unwrap())).expect("Error seeking to offset");
+            copy(r, &mut w).unwrap();
+        } else if c.decode {
+            // Decoding specific operations
+            buff.resize((offset - 16) as usize, 0);
+            r.read_exact(&mut buff).unwrap();
+            w.write_all(&buff).unwrap();
+            let offset = self.get_offset(r);
+            self.read_chunk(r);
+            println!("Encoded Payload: {:?}", self.chk);
+            let decoded_data = xor_encode_decode(&self.chk.data, &c.key);
+            let decoded_string = String::from_utf8_lossy(&decoded_data);
+            println!("Decoded Payload: {:?}", decoded_data);
+            println!("Original Data: {:?}", decoded_string);
+            r.seek(SeekFrom::Current(self.chk.data.len().try_into().unwrap()))
+                .expect("Error seeking to offset");
+            copy(r, &mut w).unwrap();
+        }
     }
 }
 
@@ -241,7 +261,7 @@ impl CmdArgs {
 fn xor_encode_decode(input: &[u8], key: &str) -> Vec<u8> {
     let mut b_arr = Vec::with_capacity(input.len());
     for (i, &byte) in input.iter().enumerate() {
-        b_arr.push(byte.wrapping_add(key.as_bytes()[i % key.len()]));
+        b_arr.push(byte ^ key.as_bytes()[i % key.len()]);
     }
     b_arr
 }
@@ -265,6 +285,7 @@ fn main() {
         let mut file_writer = File::create(&cmd_line_opts.output).unwrap();
         // Assuming encoding is requested
         let encoded_data = xor_encode_decode(cmd_line_opts.payload.as_bytes(), &cmd_line_opts.key);
+        println!("original bytes {:?}", cmd_line_opts.payload.as_bytes());
 
         // Calculate CRC for the encoded data
         let mut bytes_msb = Vec::new();
@@ -285,7 +306,9 @@ fn main() {
 
         println!("Image encoded and written successfully!");
     } else if cmd_line_opts.decode {
-        // TODO: Find and decode the payload
-        meta_chunk.process_image(&mut file);
+        let mut file_writer = File::create(&cmd_line_opts.output).unwrap();
+        let mut file_reader = &file;
+        meta_chunk.write_data(&mut file_reader, &cmd_line_opts, &mut file_writer);
+        // meta_chunk.process_image(&mut file);
     }
 }
