@@ -1,0 +1,30 @@
+[package]
+name = "dark-web-rust"
+version = "0.4.0"
+edition = "2021"
+authors = ["Mahmoud Harmouch <oss@wiseai.dev>"]
+description = "A hands-on book for abusing systems using Rust."
+repository = "https://github.com/wiseaidev/dark-web-rust"
+license = "MIT"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# Note: this is just a dummy cargo file contains all deps for Dependabot to update and for better
+# github visibility 
+
+[dependencies]
+aes = "0.8.3"
+base64 = "0.21.5"
+bcrypt = "0.15.0"
+cbc = { version = "0.1.2", features = ["alloc"] }
+chacha20poly1305 = "0.10.1"
+evcxr = "0.17.0"
+hex = "0.4.3"
+hex-literal = "0.4.1"
+md-5 = "0.10.6"
+rand = "0.8.5"
+reqwest = { version = "0.11.23", features = ["cookies"] }
+ring = "0.17.7"
+rsa = { version = "0.9.6", features = ["sha2"] }
+serde_json = "1.0.109"
+socket2 = { version = "0.5.5", features = ["all"] }
