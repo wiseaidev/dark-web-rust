@@ -613,7 +613,7 @@ Consider a scenario where two processes work in collaborative data processing by
 
 In contrast to shared mapping, the [**`MAP_PRIVATE`**](https://docs.rs/libc/latest/libc/constant.MAP_PRIVATE.html) option delves into the realm of data isolation and process-specific modifications. When a file is mapped using `MAP_PRIVATE`, the content becomes exclusive to the calling process's virtual memory. Any changes made to this memory are confined to the process itself, remaining invisible to other processes. Moreover, these changes do not permeate back to the underlying file, establishing a clear boundary between the private copy held in memory and the original file on disk.
 
-The `MAP_PRIVATE` option finds its utility when a process seeks an insulated workspace, free from external interference. In the realm of data privacy and security, this option ensures that modifications made within the mapped memory do not inadvertently affect other processes or the original file. Visualizing this in Figure 8.1 (b), a process utilizing `MAP_PRIVATE` creates a private copy of the file in its virtual memory, illustrating the encapsulation of changes within the confines of the individual process.
+The `MAP_PRIVATE` option finds its utility when a process seeks an insulated workspace, free from external interference. In the realm of data privacy and security, this option ensures that modifications made within the mapped memory do not inadvertently affect other processes or the original file.
 
 ```sh
                 +-----------------------------------+
