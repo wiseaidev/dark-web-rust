@@ -1,0 +1,8 @@
+[default.databases.sqlite_db]
+url = "db.sqlite"
+
+# only `url` is required. the rest have defaults and are thus optional
+min_connections = 64
+max_connections = 1024
+connect_timeout = 5
+idle_timeout = 120
