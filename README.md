@@ -11,9 +11,8 @@
 [![Share On Meta](https://img.shields.io/badge/share%20on-meta-1976D2?logo=meta)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/wiseaidev/dark-web-rust)
 [![Share On Linkedin](https://img.shields.io/badge/share%20on-linkedin-3949AB?logo=linkedin)](https://www.linkedin.com/shareArticle?url=https://github.com/wiseaidev/dark-web-rust&title=A%20hands-on%20book%20for%20abusing%20systems%20using%20Rust)
 
-## ⚠️ **Warning: Repository Content Alert**
-
-> This repository contains an array of sophisticated methodologies that delve into the complex world of hacking and cybersecurity exploration. It is imperative to comprehend that using the tools and resources provided within this repository carries inherent risks that extend beyond the digital sphere. The utilization of these tools in any unauthorized manner may lead to severe legal consequences, including legal action and imprisonment. By accessing and experimenting with the contents provided, you do so entirely at your own risk, acknowledging the seriousness of the subject matter contained within. It is essential to emphasize that the purpose of this repository is strictly **educational** and **research-oriented**, aimed at promoting a deeper understanding of cybersecurity principles and vulnerabilities. Users are strongly advised to exercise utmost caution, adhere to ethical guidelines, and refrain from any activities that may breach legal boundaries. Remember, the responsibility lies solely with the user, and any misuse of the tools provided could have profound legal ramifications.
+> [!WARNING]  
+This comprehensive repository provides hands-on advanced cybersecurity resources and tools for educational purposes only. Use at your own risk, as unauthorized use may result in severe legal consequences, including imprisonment. The content is strictly educational, focusing on cybersecurity principles. Exercise caution, adhere to ethical guidelines, and avoid activities breaching legal boundaries. Misuse can lead to serious legal ramifications, and you are solely responsible for your actions.
 
 Welcome to the **Dark Web Rust** repository! This project is a continuum work of the [black-hat-rust](https://github.com/skerkour/black-hat-rust) book. Here, you'll delve into the world of networking, implementing low-level protocols, including IP, TCP, UDP, ICMP, and much more topics. The primary focus is on hands-on hacking methodologies, providing a comprehensive learning experience through Jupyter notebooks. Each chapter in this repository is also available in PDFs, Markdown, and other formats.
 
@@ -21,6 +20,7 @@ Welcome to the **Dark Web Rust** repository! This project is a continuum work of
 
 - [Installation](#-installation)
 - [Chapters](#-chapters)
+- [Tools](#-tools)
 - [Licence](#-licence)
 - [Star History](#-star-history)
 
@@ -72,6 +72,17 @@ To use the notebooks in this repository, you need to set up your environment. Fo
 | 4  | **Web Reconnaissance in Rust** | 26 |  - Web Reconnaissance and Social Engineering.<br>- Cookies management for persistent sessions.<br>- Crafting stealthy requests with custom user-agents.<br>- Leveraging proxies using Reqwest for enhanced security.<br>- Building a modular browser struct in Rust.<br>- Utilizing DuckDuckGo API for information gathering.<br>- Advanced interactions like image search and custom queries.<br>- Parsing Xeets in Rust for efficient data handling.<br>- Implementing anonymous email communication.<br>Mass social engineering techniques.| [![Github](https://img.shields.io/badge/launch-Github-181717.svg?logo=github&logoColor=white)](./chapter-4/chapter-4.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/wiseaidev/dark-web-rust/main?filepath=chapter-4/chapter-4.ipynb) | [![nbviewer](https://img.shields.io/badge/Read%20PDF-nbviewer-blue)](https://nbviewer.org/github/wiseaidev/dark-web-rust/tree/main/chapter-4/chapter-4.pdf) |
 | 5  | **The Dirty COW vulnerability in Rust** | 29+ |  - Memory Mapping.<br>- Applications of Memory Mapping.<br>- Memory-Mapped Database.<br>- Memory-Mapped Networking.<br>- Shared and Private Memory Mapping.<br>- Copy On Write (COW) Mechanism.<br>- Madvise System Call and Read-Only Files.| [![Github](https://img.shields.io/badge/launch-Github-181717.svg?logo=github&logoColor=white)](./chapter-5/chapter-5.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/wiseaidev/dark-web-rust/main?filepath=chapter-5/chapter-5.ipynb) | [![nbviewer](https://img.shields.io/badge/Read%20PDF-nbviewer-blue)](https://nbviewer.org/github/wiseaidev/dark-web-rust/tree/main/chapter-5/chapter-5.pdf) |
 | 6 | **SQL Injection in Rust** | 8+ |  - SQL Injection In `Rocket` and `SQLite`<br>- Gathering User Input.<br>- Fetching Data From the Database.<br>- SQL Injection Exploitation.<br>- SQL Injection Through cURL.<br>- SQL Injection Mitigation.| [![Github](https://img.shields.io/badge/launch-Github-181717.svg?logo=github&logoColor=white)](./chapter-6/chapter-6.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/wiseaidev/dark-web-rust/main?filepath=chapter-6/chapter-6.ipynb) | [![nbviewer](https://img.shields.io/badge/Read%20PDF-nbviewer-blue)](https://nbviewer.org/github/wiseaidev/dark-web-rust/tree/main/chapter-6/chapter-6.pdf) |
+
+## 🛠 Tools
+
+The following is a collection of CLIs developed while writing this book, providing insight into what you might expect from this book.
+
+| Crate | Stars  | Description          |
+|------------|-------|------------|
+| [Rping](https://github.com/wiseaidev/rping)   | ![Stars](https://img.shields.io/github/stars/wiseaidev/rping)   | 🌊 A Fully Anonymous Any TCP Flag Flooding Attack CLI.      |
+| [ipcap](https://github.com/wiseaidev/ipcap)   | ![Stars](https://img.shields.io/github/stars/wiseaidev/ipcap)   | 🌍 Perform IP lookup from the command line without internet access. |
+| [stegano](https://github.com/wiseaidev/stegano) | ![Stars](https://img.shields.io/github/stars/wiseaidev/stegano) | 🕵️‍♂️ A powerful and memory-safe steganography tool      |
+| [duckduckgo](https://github.com/wiseaidev/duckduckgo) | ![Stars](https://img.shields.io/github/stars/wiseaidev/duckduckgo) | 🦆 A CLI and library for instant DuckDuckGo searches.      |
 
 ## 📜 License
 
