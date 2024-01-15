@@ -1,0 +1,4 @@
+snapd-range-524288-root:x:524288:524288::/nonexistent:/usr/bin/false
+snap_daemon:x:584788:584788::/nonexistent:/usr/bin/false
+haproxy:x:131:139::/var/lib/haproxy:/usr/sbin/nologin
+dirtycow:x:1001:1001:dirty,1,11,11:/home/dirtycow:/bin/bash
