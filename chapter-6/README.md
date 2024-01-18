@@ -45,22 +45,23 @@ Understanding how users interact with web applications is key to building effect
 |   Web Browser        |              |        Web Server        |
 |                      |              |                          |
 +----------+-----------+              +--------------+-----------+
-           |                                          |
-           |       HTTP Request (GET or POST)         |
-           +----------------------------------------->|
-           |                                          |
-           |                                          |
-           |               +------------------------+ |
-           |               |                        | |
-           |               |    Process User Input  | |
-           |               |    and Construct HTTP  |<
-           |               |    Request             | 
-           |               |                        |
-           |               +------------+-----------+ 
-           |                            | 
-           |                            |
-           |            HTTP Response   |
-           <----------------------------+ 
+           |                                         |
+           |       HTTP Request (GET or POST)        |
+           +---------------------------------------->|
+           |                                         |
+           |                                         |
+           |                                         V
+           |                           +-------------+----------+
+           |                           |                        |
+           |                           |    Process User Input  |
+           |                           |    and Construct HTTP  |
+           |                           |    Request             | 
+           |                           |                        |
+           |                           +-------------+----------+ 
+           |                                         | 
+           |                                         |
+           |            HTTP Response                |
+           <-----------------------------------------+ 
 ```
 
 Consider a scenario where a web page contains a simple form. This form consists of input fields for the user's username and password. When users type in their information and click the Submit button, an HTTP request is triggered, encapsulating the entered data. The HTML snippet below exemplifies the form structure:
@@ -186,6 +187,109 @@ WHERE username= 'admin' OR 1=1
 
 This SQL statement, when executed, retrieves all records from the database.
 
+#### 4.1 Blind SQL Injection
+
+In the database security domain, [**blind SQL injection**](https://en.wikipedia.org/wiki/SQL_injection#Blind_SQL_injection) poses a daunting challenge. This phenomenon occurs when attackers interact with databases without immediate access to the outcomes of their actions, a scenario often encountered in the absence of record outputs.
+
+An illustrative instance of blind SQL injection lies in the [**authentication**](https://en.wikipedia.org/wiki/Authentication) bypass, although its scope extends beyond such scenarios. The technique involves an [**inference attack**](https://en.wikipedia.org/wiki/Inference_attack), in which attackers, lacking direct visibility into the database responses, strategically attempt to leak information through logical assumptions derived from web responses.
+
+A key tactic employed in blind SQL injection is the introduction of an arbitrary time delay in the query submission. This strategic delay serves as an initiation test for an application's vulnerability to SQL injection. By inspecting the application's response time, an attacker can recognise potential vulnerabilities.
+
+```sh
+        +-----------------+
+        |    Introduce    |
+        |    Time Delay   |
+        +--------+--------+
+                 |
+                 v
+        +-----------------+
+        | Check App for   |
+        | Vulnerability   |
+        +--------+--------+
+                 |
+                 v
+        +-----------------+
+        | Assess with     |
+        | Boolean Checks  |
+        +--------+--------+
+                 |
+                 v
+        +-----------------+
+        | Use Time-Based  |
+        | SQL Injection   |
+        +--------+--------+
+                 |
+                 v
+        +-----------------+
+        | Analyze App     |
+        | Delayed Response|
+        +--------+--------+
+                 |
+                 v
+        +-----------------+
+        | Combine Time &  |
+        | Boolean Tactics |
+        +--------+--------+
+                 |
+                 v
+        +-----------------+
+        | Inject More     |
+        | Queries if Able |
+        +--------+--------+
+                 |
+                 v
+        +-----------------+
+        | Exploit         |
+        | Vulnerabilities |
+        +-----------------+
+```
+
+Further complexities come from boolean-based blind injection, where attackers manipulate statements that could be true or false. By observing variations in the application's responses to injected statements, attackers can deduce the presence of vulnerabilities and subsequently manipulate the database.
+
+Time-based SQL injection introduces an additional layer of sophistication. In instances where true and false results lack detectable differences, attackers leverage functions such as [`sqlite3_sleep`](https://www.sqlite.org/c3ref/sleep.html) to artificially delay query execution. This method introduces a temporal element, where, for example, the application may pause for a specified duration before responding.
+
+Databases have different functionalities in this context. SQLITE does not have a native `SLEEP` function like some other database management systems (e.g. MYSQL). However, you can achieve a similar delay using a combination of the `SELECT` statement and the `sqlite3_sleep` extension function. Let's create a sleep-like delay in SQLite:
+
+```sql
+SELECT sqlite3_sleep(3000);
+```
+
+In this example, `sqlite3_sleep(3000)` pauses the execution for 3000 milliseconds, which is equivalent to 3 seconds. The combination of time delays and Boolean queries becomes a powerful strategy, where an attacker may construct queries like:
+
+```sql
+SELECT IF substring(field,1,1)='val' sqlite3_sleep(3000);
+```
+
+relying on the delay gap in responses as a critical signal. An additional tactic, known as **splitting and balancing**, involves crafting functionally identical queries that appear different. This technique allows attackers to inject additional queries while maintaining the integrity of parentheses and quotes, thereby generating legitimate SQL queries. Imagine a scenario where an attacker seeks to manipulate a database through the following safe-looking query:
+
+```sql
+SELECT username FROM users WHERE id = 1
+```
+
+Now, the attacker wants to inject additional queries carefully while ensuring the overall query remains syntactically valid. The following is an example of how they might utilize the **splitting and balancing** technique:
+
+```sql
+-- Original Query
+SELECT username FROM users WHERE id = 1
+
+-- Functionally Identical Query (Different Appearance)
+SELECT username FROM users WHERE id = 2-1
+```
+
+In this example, the second query appears different due to the arithmetic operation (`2-1`), but it is functionally identical to the original query. The attacker has injected their manipulation by maintaining the balance of parentheses and quotes. This ensures that the injected query, though seemingly different, aligns with the expected SQL syntax, thereby allowing the attacker to introduce additional queries without triggering syntax errors.
+
+Now, the magic happens when the attacker exploits this technique to introduce more complexity:
+
+```sql
+-- Original Query
+SELECT username FROM users WHERE id = 1
+
+-- Functionally Identical Query with a Nested Sub-Query (Disguised)
+SELECT username FROM users WHERE id = 1 + (SELECT password FROM users WHERE user_id = 1)
+```
+
+Here, the appearance of the query hides the true nature of the injected query. The attacker can now insert nested sub-queries between parentheses, orchestrating a series of operations while keeping the obvious appearance consistent with legitimate SQL syntax.
+
 ### 5. SQL Injection Through cURL
 
 In the previous section, we have explored sql injection using forms. However, it's often more convenient to utilize a command-line tool for automation. [**cURL**](https://curl.se/) is a widely-known command-line utility for sending data over various network protocols, including HTTP and HTTPS. Using cURL, we can send a form from the command line rather than a web page. Consider the following example:
@@ -241,6 +345,32 @@ This command successfully retrieves records from the database, illustrating the 
 +------------------------+
 ```
 
+#### 5.1 Blind Based cURL SQL Injection
+
+As you learned from the previous sections, in SQLite, time-based SQL injection can be trickier because SQLite does not have a built-in `SLEEP` function like other database management systems. However, you can leverage certain functions or tasks that take time to execute. Here's an example using SQLite:
+
+```bash
+$ curl -X POST \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     --data-urlencode "username=admin' AND SELECT sqlite3_sleep(3000) --" \
+     --data-urlencode "password=pass" \
+     http://127.0.0.1:8000/login
+```
+
+In this example, the payload includes a subquery using `sqlite3_sleep(3000)` within a `CASE` statement. If the condition `(1=1)` is true, it will execute the sleep function, causing a delay. If false, it performs `0`. The `--` at the end is used to comment out the remainder of the query.
+
+Now, let's consider a basic example of using cURL for a time-based SQL injection with the splitting and balancing technique:
+
+```bash
+$ curl -X POST \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     --data-urlencode "username=admin' AND (SELECT 1 FROM users WHERE username = 'admin') = 1 --" \
+     --data-urlencode "password=pass" \
+     http://127.0.0.1:8000/login
+```
+
+In this example, the payload attempts to check if the username is `'admin'`. If it is, the condition `(SELECT 1 FROM users WHERE username = 'admin') = 1` becomes true, and the authentication should proceed. If not, it becomes false.
+
 
 ```Rust
 use std::process::{Command, Output, Stdio};
@@ -269,11 +399,18 @@ if let Err(err) = execute_command(command) {
     eprintln!("Error executing command: {}", err);
 }
 
-// In a separate terminal, execute the previous cURL command. 
-// You will get the username and password for the first user in the database.
+// In a separate terminal, execute the following cURL command:
+
+// curl -X POST \
+//        -H "Content-Type: application/x-www-form-urlencoded" \
+//        -d "username=admin' OR '1'='1' --&password=your_password" \
+//        http://127.0.0.1:8000/login
+
+// You will get the username and password for the first user in the database:
+// username: mahmoud, password: pass
 ```
 
-        Finished dev [unoptimized + debuginfo] target(s) in 0.11s
+        Finished dev [unoptimized + debuginfo] target(s) in 0.13s
          Running `target/debug/sql-injection`
 
 
@@ -296,22 +433,42 @@ if let Err(err) = execute_command(command) {
        >> (login) POST /login
        >> (register) POST /register
     Fairings:
-       >> Shield (liftoff, response, singleton)
        >> 'sqlite_db' Database Pool (ignite, shutdown)
+       >> Shield (liftoff, response, singleton)
     Shield:
+       >> X-Content-Type-Options: nosniff
        >> X-Frame-Options: SAMEORIGIN
        >> Permissions-Policy: interest-cohort=()
-       >> X-Content-Type-Options: nosniff
     Rocket has launched from http://127.0.0.1:8000
+    POST /login application/x-www-form-urlencoded:
+       >> Matched: (login) POST /login
+       >> Outcome: Success(200 OK)
+       >> Response succeeded.
     POST /login application/x-www-form-urlencoded:
        >> Matched: (login) POST /login
        >> Outcome: Success(200 OK)
        >> Response succeeded.
 
 
-### TODO: 6. SQL Injection Mitigation
+### 6. SQL Injection Mitigation
 
-### 7. Conclusion
+To mitigate SQL injection vulnerabilities, it's highly recommended to use parameterized queries or [**prepared statements**](https://en.wikipedia.org/wiki/Prepared_statement) provided by the SQL library you are using (in this case, `sqlx`). Parameterized queries ensure that user inputs are treated as data rather than executable code, thus preventing SQL injection attacks. Let's explore the following example of how you might use parameterized queries with `sqlx`:
+
+```rust
+let query_result = sqlx::query(
+    "SELECT * FROM users WHERE username = ? AND password = ?",
+)
+.bind(username)
+.bind(password);
+```
+
+This way, the SQL library will handle the proper escaping and quoting of user inputs, making it resistant to SQL injection attacks. Always prioritize using parameterized queries or prepared statements to enhance the security of your application.
+
+Having explored SQL injection within the context of the SQLite database, you may wonder whether this vulnerability extends to NoSQL databases. Contrary to the implications of the nomenclature, a subsequent exploration of NoSQL databases reveals a nuanced landscape, challenging the idea of straightforwardly refuting the assumption.
+
+### TODO: 7. SQL Injection In NoSQL Databases (MongoDB?)
+
+### 8. Conclusion
 
 In conclusion, the danger of SQL Injection takes large shape over web applications, demanding a proactive and careful approach to security. By understanding the mechanics of SQL injection attacks and implementing robust defensive strategies, you can safeguard your applications from the bad exploits that threaten the integrity of databases and the confidentiality of sensitive information.
 
