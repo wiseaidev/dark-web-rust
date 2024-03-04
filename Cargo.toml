@@ -14,7 +14,7 @@ publish = false
 
 [dependencies]
 aes = "0.8.3"
-base64 = "0.21.5"
+base64 = "0.22.0"
 bcrypt = "0.15.0"
 cbc = { version = "0.1.2", features = ["alloc"] }
 chacha20poly1305 = "0.10.1"
