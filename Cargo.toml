@@ -23,7 +23,7 @@ hex = "0.4.3"
 hex-literal = "0.4.1"
 md-5 = "0.10.6"
 rand = "0.8.5"
-reqwest = { version = "0.11.23", features = ["cookies"] }
+reqwest = { version = "0.12.1", features = ["cookies"] }
 ring = "0.17.7"
 rsa = { version = "0.9.6", features = ["sha2"] }
 serde_json = "1.0.109"
